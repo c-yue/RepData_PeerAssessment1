@@ -1,25 +1,162 @@
 ---
 title: "Reproducible Research: Peer Assessment 1"
+author: 'Yue'
 output: 
   html_document:
     keep_md: true
 ---
 
+setting
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# knitr::opts_chunk$set(tidy.opts=list(width.cutoff=80),tidy=TRUE)
+# knitr::opts_chunk$set(cache.extra = rand_seed)
+```
+
+import library
+```{r}
+library(sqldf)
+library(dplyr)
+library(ggplot2)
+```
 
 ## Loading and preprocessing the data
+
+```{r}
+# read data
+act <- read.csv('activity.csv')
+#change format
+act$date <- as.Date(act$date)
+```
+
+
 
 
 
 ## What is mean total number of steps taken per day?
 
+```{r}
+steps <- act$steps
+date <- act$date
+steps_by_date <- tapply(steps, date, sum, na.rm = TRUE)
+
+steps_by_date
+
+boxplot(steps_by_date)
+hist(steps_by_date)
+
+mean(steps_by_date)
+median(steps_by_date)
+```
+
+the mean steps of these dates is 9354.23
+the mean steps of these dates is 10395
+
 
 
 ## What is the average daily activity pattern?
+
+```{r}
+interval <- act$interval
+steps_avg_by_interval <- tapply(steps, interval, mean, na.rm = TRUE)
+
+plot(unique(interval), steps_avg_by_interval, type = 'l', )
+
+max_interval_no <- match(max(steps_avg_by_interval), steps_avg_by_interval)
+#the same as the match func: which(steps_avg_by_interval == max(steps_avg_by_interval))
+steps_avg_by_interval[max_interval_no]
+```
+
+the 835 interval contains the maximum number of steps
+
+
 
 
 
 ## Imputing missing values
 
+calculate missing rows
+```{r}
+miss_row <- act[is.na(act$steps) | is.na(act$date) | is.na(act$interval), ]
+nrow(miss_row)
+```
+there are 2304 rows with NA value
+
+
+the strategy to fullfill the missing value: use the avg steps of that date or 0
+```{r}
+na_replace <- tapply(steps, date, mean, na.rm = TRUE)
+na_replace[is.na(na_replace)]=0
+
+na_replace <- data.frame(date = unique(act$date),
+                         avg_steps = na_replace
+                         )
+
+act <-  sqldf('select
+                        case when steps is null then n.avg_steps
+                        else steps end 
+                        as steps
+                        ,a.date
+                        ,a.interval
+                from 
+                        act a
+                        left join na_replace n on a.date = n.date
+              ')
+```
+
+
+Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day
+```{r}
+steps <- act$steps
+date <- act$date
+steps_by_date <- tapply(steps, date, sum, na.rm = TRUE)
+
+steps_by_date
+
+hist(steps_by_date)
+
+mean(steps_by_date)
+median(steps_by_date)
+```
+Mean and median total number of steps taken per day does not differ from the estimates from the first part of the assignment. There is no impact of imputing missing data on the estimates of the total daily number of steps.
+
+
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```{r}
+week_sort <- if_else(weekdays(act$date) %in% c('星期六','星期日'),'weekend','weekday')
+week_sort <- as.factor(week_sort)
+act$week_sort <- week_sort
+
+act_week_perform <- 
+        act %>%
+        group_by(week_sort, interval) %>%
+        summarise(mean_step = mean(steps))
+
+g <- ggplot(act_week_perform, aes(x=interval, y=mean_step))
+g + geom_line() +
+    facet_wrap( ~ week_sort, nrow = 2, ncol = 1) +
+    labs(y = 'number of steps')
+```
+
+on weekend the activity is more active
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
